@@ -1,8 +1,10 @@
 import json, sys, httpx, re, os, xml
+from io import BytesIO
 
 from xml.etree import ElementTree
 from xml.dom import minidom
 
+import pycurl
 from httpx import DigestAuth
 
 import config
@@ -243,17 +245,54 @@ def downloadTracksAndUpload(mediapackageSearch, ingest_mp):
         command = "curl --digest -u " + config.sourceuser + ":" + config.sourcepassword + " -H 'X-Requested-Auth: Digest' '" + urlFromMp + "' -o " + filename
         print(command)
         os.system(command)
-        files = {'file': open(filename, 'rb')}
+        # files = {'file': open(filename, 'rb')}
+        #
+        # data = {'flavor': track.get("type"), 'mediaPackage': ingest_mp, 'tags': tags}
+        # files = {'BODY': (filename, open(filename, 'rb'))}
+        # ingest_track_resp = httpx.post(config.targetserver + "/ingest/addTrack", headers={"X-Requested-Auth": "Digest"},
+        #                                    auth=targetauth, data=data, files=files)
+        # if ingest_track_resp.status_code == httpx.codes.ok:
+        #     print("----   Ingested Tracks \n"+ ingest_track_resp.text)
+        #     ingest_mp = ingest_track_resp.text
 
-        data = {'flavor': track.get("type"), 'mediaPackage': ingest_mp, 'tags': tags}
-        files = {'BODY': (filename, open(filename, 'rb'))}
-        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addTrack", headers={"X-Requested-Auth": "Digest"},
-                                           auth=targetauth, data=data, files=files)
-        if ingest_track_resp.status_code == httpx.codes.ok:
-            print("----   Ingested Tracks \n"+ ingest_track_resp.text)
-            ingest_mp = ingest_track_resp.text
+        ingest_mp = ingest_track(ingest_mp, track.get("type"), filename, tags)
+        print("----   Ingested Tracks \n" + ingest_mp)
         os.remove(filename)
     return ingest_mp
+
+
+def ingest_track(mp: str,
+                 flavor: str,
+                 track_url: str,
+                 tags: str):
+    url_path = '/ingest/addTrack'
+    data = [
+        ('mediaPackage', mp),
+        ('flavor', flavor),
+        ('tags', tags),
+        ('BODY', (pycurl.FORM_FILE, track_url))
+    ]
+    headers = dict()
+    c = pycurl.Curl()
+    c.setopt(pycurl.URL, (config.targetserver + url_path).encode('ascii', 'ignore'))
+    c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
+    c.setopt(pycurl.USERPWD, f'{config.targetuser}:{config.targetpassword}')
+    headers = config.header
+    c.setopt(pycurl.HTTPHEADER, ['{}: {}'.format(k, v) for (k, v) in headers.items()])
+    c.setopt(pycurl.HTTPPOST, data)
+    buf = BytesIO()
+    c.setopt(pycurl.WRITEFUNCTION, buf.write)
+    c.setopt(pycurl.FOLLOWLOCATION, True)
+    print("start ingesting track {} as {}".format(track_url, flavor))
+    c.perform()
+    status = c.getinfo(pycurl.HTTP_CODE)
+    c.close()
+    if int(status / 100) != 2:
+        raise Exception('Request to {} failed, HTTP error code {}'
+                        .format(url_path, status))
+    result = buf.getvalue()
+    buf.close()
+    return result
 
 
 def prettifyxml(elem):
