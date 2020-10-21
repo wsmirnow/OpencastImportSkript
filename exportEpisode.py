@@ -292,7 +292,7 @@ def ingest_track(mp: str,
                         .format(url_path, status))
     result = buf.getvalue()
     buf.close()
-    return result
+    return result.decode('utf-8')
 
 
 def prettifyxml(elem):
