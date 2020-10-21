@@ -103,7 +103,7 @@ def getSignedURL(fileID,mediapacakgeID,xmlchild):
     getURL= config.adminui+'/admin-ng/event/'+ mediapacakgeID +'/asset/'+xmlchild+'/'+fileID+'.json'
     print(getURL)
     trackJson = httpx.get(getURL, headers=config.header,
-                                      auth=sourceauth, verify=False).json()
+                                      auth=sourceauth).json()
     url = trackJson['url']
     print(url)
 
@@ -125,13 +125,13 @@ def addCatalogsviaUrl(mediapackageSearch, ingest_mp):
         print("Payload Catalogs\n"+ str(payload))
         print(config.targetserver)
         ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
-                                          auth=targetauth, data=payload, verify=False)
+                                          auth=targetauth, data=payload)
         if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
         payload = {'flavor': 'dublincore/episode', 'mediaPackage': str(ingest_track_resp), 'tags': str(tags), 'url': str(urlFromMp)}
         ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
-                                          auth=targetauth, data=payload, verify=False)
+                                          auth=targetauth, data=payload)
 
         if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
@@ -163,16 +163,16 @@ def donwloadCatalogsAndUpload(mediapackageSearch, ingest_mp):
         print(payload)
         print(config.targetserver)
         ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
-                                          files=files, auth=targetauth, data=payload, verify=False)
+                                          files=files, auth=targetauth, data=payload)
         if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
-        payload = {'flavor': 'dublincore/episode', 'mediaPackage': str(ingest_track_resp), 'tags': str(tags)}
-        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
-                                          files=files, auth=targetauth, data=payload, verify=False)
-
-        if ingest_track_resp.status_code == httpx.codes.ok:
-            ingest_mp = ingest_track_resp.text
+        # payload = {'flavor': 'dublincore/episode', 'mediaPackage': str(ingest_track_resp), 'tags': str(tags)}
+        # ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
+        #                                   files=files, auth=targetauth, data=payload)
+        #
+        # if ingest_track_resp.status_code == httpx.codes.ok:
+        #     ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
         os.remove(filename)
     return ingest_mp
@@ -200,7 +200,7 @@ def downloadAttachmentsAndUpload(mediapackageSearch, ingest_mp):
 
         payload = {'flavor': attechment.get("type"), 'mediaPackage': ingest_mp, 'tags': tags}
         ingest_track_resp = httpx.post(config.targetserver + "/ingest/addAttachment", headers=config.header,
-                                          files=files, auth=targetauth, data=payload, verify=False)
+                                          files=files, auth=targetauth, data=payload)
         if ingest_track_resp.status_code == httpx.codes.ok:
           ingest_mp = ingest_track_resp.text
         os.remove(filename)
@@ -272,7 +272,7 @@ def ingestMediapackage(mediapackage):
     f.close()
     payload = {'mediaPackage': mediapackage}
     ingest_track_resp = httpx.post(config.targetserver + "/ingest/ingest/" + config.targetworkflow,
-                                      headers=config.header, auth=targetauth, data=payload, verify=False)
+                                      headers=config.header, auth=targetauth, data=payload)
     print(ingest_track_resp.text)
     print("Ingesting done")
 
