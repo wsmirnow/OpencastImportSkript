@@ -20,4 +20,6 @@ def main()
     resp.raise_for_status()
     mp = resp.text
     print(f'mediapackage: {mp}')
-    
+
+if __name__ == '__main__':
+    main()
