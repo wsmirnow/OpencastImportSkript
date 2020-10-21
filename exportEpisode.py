@@ -1,12 +1,12 @@
-import json, sys, requests, re, os, xml
-from requests.auth import HTTPDigestAuth
-from requests.auth import HTTPBasicAuth
+import json, sys, httpx, re, os, xml
+
 from xml.etree import ElementTree
 from xml.dom import minidom
+
+from httpx import DigestAuth
+
 import config
-import pycurl
 import handleSeries
-from requests_toolbelt import MultipartEncoder
 
 from subprocess import Popen, PIPE, STDOUT
 import addTrack
@@ -15,8 +15,8 @@ searchrequest = config.engageserver + config.searchendpoint + sys.argv[1]
 
 archiverequest = config.archiveserver + config.archiveendpoint + sys.argv[1]
 
-sourceauth = HTTPDigestAuth(config.sourceuser, config.sourcepassword)
-targetauth = HTTPDigestAuth(config.targetuser, config.targetpassword)
+sourceauth = DigestAuth(config.sourceuser, config.sourcepassword)
+targetauth = DigestAuth(config.targetuser, config.targetpassword)
 
 # The Files will be downloaded to the lokal Disk, if false Opencast will download from set url in the Mediapackage
 downloadToDisk = True
@@ -36,14 +36,14 @@ def jsonMakeObjectToList(jsonobject):
 
 
 def getMediapackageDataFromSearch():
-    searchresult = requests.get(searchrequest, auth=sourceauth, headers=config.header)
+    searchresult = httpx.get(searchrequest, auth=sourceauth, headers=config.header)
     print(searchrequest)
     searchresult = ElementTree.fromstring(searchresult.text)
     return searchresult
 
 
 def getMediapackageDataFromArchive():
-    archiveResult = requests.get(archiverequest, auth=sourceauth, headers=config.header)
+    archiveResult = httpx.get(archiverequest, auth=sourceauth, headers=config.header)
     print(archiverequest)
     archiveResult = ElementTree.fromstring(archiveResult.text)
     return archiveResult
@@ -82,7 +82,7 @@ def mergeMediapackageSearchandMediapackageArchive(archiveMp, searchMp):
 
 def createMediapackeOnIngestNode(mediaPackageId):
         # create mediapackage with right ID
-        create_mediapackage_resp = requests.put(config.targetserver + "/ingest/createMediaPackageWithID/" + mediaPackageId,
+        create_mediapackage_resp = httpx.put(config.targetserver + "/ingest/createMediaPackageWithID/" + mediaPackageId,
                                                 headers=config.header, auth=targetauth)
         return create_mediapackage_resp.text
 
@@ -102,7 +102,7 @@ def getSignedURL(fileID,mediapacakgeID,xmlchild):
     url=''
     getURL= config.adminui+'/admin-ng/event/'+ mediapacakgeID +'/asset/'+xmlchild+'/'+fileID+'.json'
     print(getURL)
-    trackJson = requests.get(getURL, headers=config.header,
+    trackJson = httpx.get(getURL, headers=config.header,
                                       auth=sourceauth, verify=False).json()
     url = trackJson['url']
     print(url)
@@ -124,16 +124,16 @@ def addCatalogsviaUrl(mediapackageSearch, ingest_mp):
         payload = {'flavor': str(catalog.get("type")), 'mediaPackage': str(ingest_mp), 'tags': str(tags), 'url' : str(urlFromMp)}
         print("Payload Catalogs\n"+ str(payload))
         print(config.targetserver)
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
                                           auth=targetauth, data=payload, verify=False)
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
         payload = {'flavor': 'dublincore/episode', 'mediaPackage': str(ingest_track_resp), 'tags': str(tags), 'url': str(urlFromMp)}
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
                                           auth=targetauth, data=payload, verify=False)
 
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
     return ingest_mp
@@ -162,16 +162,16 @@ def donwloadCatalogsAndUpload(mediapackageSearch, ingest_mp):
         payload = {'flavor': str(catalog.get("type")), 'mediaPackage': str(ingest_mp), 'tags': str(tags)}
         print(payload)
         print(config.targetserver)
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
                                           files=files, auth=targetauth, data=payload, verify=False)
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
         payload = {'flavor': 'dublincore/episode', 'mediaPackage': str(ingest_track_resp), 'tags': str(tags)}
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addCatalog", headers=config.header,
                                           files=files, auth=targetauth, data=payload, verify=False)
 
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
         print(ingest_track_resp.text)
         os.remove(filename)
@@ -199,9 +199,9 @@ def downloadAttachmentsAndUpload(mediapackageSearch, ingest_mp):
 
 
         payload = {'flavor': attechment.get("type"), 'mediaPackage': ingest_mp, 'tags': tags}
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addAttachment", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addAttachment", headers=config.header,
                                           files=files, auth=targetauth, data=payload, verify=False)
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
           ingest_mp = ingest_track_resp.text
         os.remove(filename)
      return ingest_mp
@@ -221,9 +221,9 @@ def addTracksviaURL(mediapackageSearch, ingest_mp):
         filename = str(urlFromMp.split("/")[-1])
 
         payload = {'flavor': track.get("type"), 'mediaPackage': ingest_mp, 'tags': tags, 'url': urlFromMp}
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addTrack", headers=config.header,
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addTrack", headers=config.header,
                                           auth=targetauth, data=payload)
-        if ingest_track_resp.status_code == requests.codes.ok:
+        if ingest_track_resp.status_code == httpx.codes.ok:
             ingest_mp = ingest_track_resp.text
     return ingest_mp
 
@@ -245,11 +245,11 @@ def downloadTracksAndUpload(mediapackageSearch, ingest_mp):
         os.system(command)
         files = {'file': open(filename, 'rb')}
 
-        payload = {'flavor': track.get("type"), 'mediaPackage': ingest_mp, 'tags': tags, 'BODY': (filename, open(filename, 'rb'))}
-        data = MultipartEncoder(fields=payload)
-        ingest_track_resp = requests.post(config.targetserver + "/ingest/addTrack",headers={'Content-Type': data.content_type, "X-Requested-Auth": "Digest"},
-                                           auth=targetauth, data=data, verify=False)
-        if ingest_track_resp.status_code == requests.codes.ok:
+        data = {'flavor': track.get("type"), 'mediaPackage': ingest_mp, 'tags': tags}
+        files = {'BODY': (filename, open(filename, 'rb'))}
+        ingest_track_resp = httpx.post(config.targetserver + "/ingest/addTrack", headers={"X-Requested-Auth": "Digest"},
+                                           auth=targetauth, data=data, files=files)
+        if ingest_track_resp.status_code == httpx.codes.ok:
             print("----   Ingested Tracks \n"+ ingest_track_resp.text)
             ingest_mp = ingest_track_resp.text
         os.remove(filename)
@@ -271,7 +271,7 @@ def ingestMediapackage(mediapackage):
     f.write(mediapackage)
     f.close()
     payload = {'mediaPackage': mediapackage}
-    ingest_track_resp = requests.post(config.targetserver + "/ingest/ingest/" + config.targetworkflow,
+    ingest_track_resp = httpx.post(config.targetserver + "/ingest/ingest/" + config.targetworkflow,
                                       headers=config.header, auth=targetauth, data=payload, verify=False)
     print(ingest_track_resp.text)
     print("Ingesting done")
